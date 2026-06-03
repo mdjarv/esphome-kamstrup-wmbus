@@ -9,6 +9,7 @@
 #include "wmbus_crypto.h"
 #include "wmbus_meter_parser.h"
 #include "wmbus_packet_buffer.h"
+#include <array>
 #include <memory>
 
 namespace esphome {
@@ -51,6 +52,12 @@ class KamstrupWMBusComponent : public PollingComponent, public spi::SPIDevice<sp
   // Helper functions
   void update_meter_stats_(uint32_t meter_id_uint, const std::string &frame_type);
   bool is_our_meter_id_(const uint8_t *meter_id_le);
+  // Decode a 4-byte little-endian A-field (as transmitted) into the meter's
+  // numeric ID, matching the big-endian value printed on the meter.
+  static uint32_t meter_id_from_le_(const uint8_t *meter_id_le) {
+    return (uint32_t) meter_id_le[3] << 24 | (uint32_t) meter_id_le[2] << 16 |
+           (uint32_t) meter_id_le[1] << 8 | (uint32_t) meter_id_le[0];
+  }
   bool read_packet_from_fifo_(uint8_t *buffer, uint8_t &length);
   bool read_fifo_into_packet_buffer_();
   void process_buffered_packets_();
@@ -66,6 +73,8 @@ class KamstrupWMBusComponent : public PollingComponent, public spi::SPIDevice<sp
   static void IRAM_ATTR packet_isr_(KamstrupWMBusComponent *instance);
   static KamstrupWMBusComponent *isr_instance_;
   volatile bool packet_ready_{false};
+  void attach_packet_interrupt_();
+  void detach_packet_interrupt_();
 
   // Helper classes (composition)
   CC1101Radio radio_;
@@ -73,11 +82,15 @@ class KamstrupWMBusComponent : public PollingComponent, public spi::SPIDevice<sp
   std::unique_ptr<WMBusMeterParser> parser_;  // Meter-specific, chosen at setup()
   WMBusPacketBuffer<4> packet_buffer_;
 
-  // Configuration
+  // Configuration (raw bytes from codegen setters)
   std::vector<uint8_t> meter_id_;
   std::vector<uint8_t> aes_key_;
   uint8_t gdo0_pin_;
   MeterModel meter_model_{MeterModel::MULTICAL21};
+
+  // Cached forms derived once in setup() to avoid per-packet work
+  uint32_t meter_id_value_{0};          // Numeric meter ID for fast comparison
+  std::array<uint8_t, 16> aes_key_arr_{};  // AES key ready for the crypto API
 
   // Sensors
   sensor::Sensor *total_consumption_sensor_{nullptr};
@@ -88,7 +101,6 @@ class KamstrupWMBusComponent : public PollingComponent, public spi::SPIDevice<sp
 
   // State tracking
   uint32_t last_packet_time_{0};
-  uint32_t last_health_check_{0};
   uint32_t packets_received_{0};
   uint32_t packets_valid_{0};
   uint32_t crc_errors_{0};

@@ -112,8 +112,8 @@ void CC1101Radio::configure() {
   ESP_LOGD(RADIO_TAG, "Configuring CC1101 registers...");
 
   // Check if CC1101 is responding by reading VERSION register
-  uint8_t version = this->read_status_register(0x31);  // VERSION register
-  uint8_t partnum = this->read_status_register(0x30);  // PARTNUM register
+  uint8_t version = this->read_status_register(CC1101_VERSION);
+  uint8_t partnum = this->read_status_register(CC1101_PARTNUM);
   ESP_LOGCONFIG(RADIO_TAG, "CC1101 PARTNUM=0x%02X, VERSION=0x%02X (expected PARTNUM=0x00, VERSION=0x04 or 0x14)",
                 partnum, version);
 
@@ -123,8 +123,8 @@ void CC1101Radio::configure() {
   }
 
   // Read back a few key registers to verify write
-  uint8_t freq2 = this->read_register(0x0D);
-  uint8_t mdmcfg2 = this->read_register(0x12);
+  uint8_t freq2 = this->read_register(CC1101_FREQ2);
+  uint8_t mdmcfg2 = this->read_register(CC1101_MDMCFG2);
   ESP_LOGD(RADIO_TAG, "Verify: FREQ2=0x%02X (expect 0x21), MDMCFG2=0x%02X (expect 0x06)", freq2, mdmcfg2);
 
   // Calibrate

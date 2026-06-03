@@ -4,12 +4,27 @@
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
 #include <mbedtls/aes.h>
+#include <algorithm>
 
 namespace esphome {
 namespace kamstrup_wmbus {
 
 // Static member initialization
 KamstrupWMBusComponent *KamstrupWMBusComponent::isr_instance_ = nullptr;
+
+void KamstrupWMBusComponent::attach_packet_interrupt_() {
+  attachInterrupt(digitalPinToInterrupt(this->gdo0_pin_),
+                  []() {
+                    if (isr_instance_ != nullptr) {
+                      KamstrupWMBusComponent::packet_isr_(isr_instance_);
+                    }
+                  },
+                  FALLING);
+}
+
+void KamstrupWMBusComponent::detach_packet_interrupt_() {
+  detachInterrupt(digitalPinToInterrupt(this->gdo0_pin_));
+}
 
 void KamstrupWMBusComponent::setup() {
   // Instantiate the meter-specific parser selected via `meter_model` config.
@@ -25,6 +40,18 @@ void KamstrupWMBusComponent::setup() {
   }
   ESP_LOGCONFIG(TAG, "Setting up Kamstrup wMBUS receiver (meter model: %s)...",
                 this->parser_->model_name());
+
+  // Derive cached forms once so the hot path does no per-packet conversion.
+  // meter_id_ is big-endian (as printed on the meter); store its numeric value.
+  if (this->meter_id_.size() >= 4) {
+    this->meter_id_value_ = (uint32_t) this->meter_id_[0] << 24 |
+                            (uint32_t) this->meter_id_[1] << 16 |
+                            (uint32_t) this->meter_id_[2] << 8 |
+                            (uint32_t) this->meter_id_[3];
+  }
+  std::copy_n(this->aes_key_.begin(),
+              std::min<size_t>(this->aes_key_.size(), this->aes_key_arr_.size()),
+              this->aes_key_arr_.begin());
 
   // Initialize SPI first
   this->spi_setup();
@@ -52,17 +79,10 @@ void KamstrupWMBusComponent::setup() {
   // Per WMBUS_IMPLEMENTATION_SPEC.md Section 3.6:
   // - GDO0 goes HIGH when sync word is detected
   // - GDO0 goes LOW at end of packet (this triggers our interrupt)
-  attachInterrupt(digitalPinToInterrupt(this->gdo0_pin_),
-                  []() {
-                    if (isr_instance_ != nullptr) {
-                      KamstrupWMBusComponent::packet_isr_(isr_instance_);
-                    }
-                  },
-                  FALLING);
+  this->attach_packet_interrupt_();
   ESP_LOGD(TAG, "GDO0 interrupt attached to GPIO%u (FALLING edge)", this->gdo0_pin_);
 
   this->last_packet_time_ = millis();
-  this->last_health_check_ = millis();
 
   // Setup periodic health check using ESPHome's set_interval()
   // This is more efficient than checking in loop() every 7ms
@@ -130,12 +150,7 @@ void KamstrupWMBusComponent::update_meter_stats_(uint32_t meter_id_uint, const s
 }
 
 bool KamstrupWMBusComponent::is_our_meter_id_(const uint8_t *meter_id_le) {
-  // meter_id_le is little-endian from packet
-  // this->meter_id_ is big-endian from config
-  return (meter_id_le[0] == this->meter_id_[3] &&
-          meter_id_le[1] == this->meter_id_[2] &&
-          meter_id_le[2] == this->meter_id_[1] &&
-          meter_id_le[3] == this->meter_id_[0]);
+  return meter_id_from_le_(meter_id_le) == this->meter_id_value_;
 }
 
 bool KamstrupWMBusComponent::read_packet_from_fifo_(uint8_t *buffer, uint8_t &length) {
@@ -268,12 +283,8 @@ bool KamstrupWMBusComponent::verify_packet_crc_(const uint8_t *packet_data, uint
 
 bool KamstrupWMBusComponent::decrypt_packet_payload_(const uint8_t *packet_data, uint8_t length,
                                                         uint8_t *plaintext, uint8_t &plaintext_length) {
-  // Convert vector to array for crypto API
-  std::array<uint8_t, 16> aes_key_array;
-  std::copy(this->aes_key_.begin(), this->aes_key_.end(), aes_key_array.begin());
-
-  // Decrypt using crypto helper
-  return this->crypto_.decrypt_packet(packet_data, length, aes_key_array, plaintext, plaintext_length);
+  // Decrypt using crypto helper (key precomputed in setup())
+  return this->crypto_.decrypt_packet(packet_data, length, this->aes_key_arr_, plaintext, plaintext_length);
 }
 
 // ============================================================================
@@ -287,7 +298,7 @@ void KamstrupWMBusComponent::loop() {
   }
 
   // Detach interrupt during FIFO processing to prevent race conditions
-  detachInterrupt(digitalPinToInterrupt(this->gdo0_pin_));
+  this->detach_packet_interrupt_();
 
   // Clear flag and increment counter
   this->packet_ready_ = false;
@@ -296,14 +307,7 @@ void KamstrupWMBusComponent::loop() {
   // Process the packet
   if (!this->read_fifo_into_packet_buffer_()) {
     this->radio_.start_rx();
-    // Re-attach interrupt before returning
-    attachInterrupt(digitalPinToInterrupt(this->gdo0_pin_),
-                    []() {
-                      if (isr_instance_ != nullptr) {
-                        KamstrupWMBusComponent::packet_isr_(isr_instance_);
-                      }
-                    },
-                    FALLING);
+    this->attach_packet_interrupt_();  // Re-attach before returning
     return;
   }
 
@@ -311,13 +315,7 @@ void KamstrupWMBusComponent::loop() {
   this->radio_.start_rx();
 
   // Re-attach interrupt
-  attachInterrupt(digitalPinToInterrupt(this->gdo0_pin_),
-                  []() {
-                    if (isr_instance_ != nullptr) {
-                      KamstrupWMBusComponent::packet_isr_(isr_instance_);
-                    }
-                  },
-                  FALLING);
+  this->attach_packet_interrupt_();
 
   // Process all packets in buffer
   this->process_buffered_packets_();
@@ -332,22 +330,8 @@ void KamstrupWMBusComponent::update() {
   // Look for OUR meter in stats
   bool found_our_meter = false;
   for (const auto &stats : this->meter_stats_) {
-    // Convert meter ID back to bytes for display (big-endian format)
-    uint8_t id_bytes[4] = {
-      (uint8_t)((stats.meter_id >> 24) & 0xFF),
-      (uint8_t)((stats.meter_id >> 16) & 0xFF),
-      (uint8_t)((stats.meter_id >> 8) & 0xFF),
-      (uint8_t)(stats.meter_id & 0xFF)
-    };
-
-    // Check if this is our meter
-    // id_bytes is already in big-endian format, same as this->meter_id_
-    bool is_ours = (id_bytes[0] == this->meter_id_[0] &&
-                    id_bytes[1] == this->meter_id_[1] &&
-                    id_bytes[2] == this->meter_id_[2] &&
-                    id_bytes[3] == this->meter_id_[3]);
-
-    if (!is_ours) {
+    // stats.meter_id is the numeric ID; compare directly to the configured one
+    if (stats.meter_id != this->meter_id_value_) {
       continue;  // Skip other meters
     }
 
@@ -358,7 +342,7 @@ void KamstrupWMBusComponent::update() {
     uint32_t elapsed_sec = elapsed_ms / 1000;
 
     ESP_LOGI(TAG, "===========================================================");
-    ESP_LOGI(TAG, "OUR METER: %02X%02X%02X%02X", id_bytes[0], id_bytes[1], id_bytes[2], id_bytes[3]);
+    ESP_LOGI(TAG, "OUR METER: %08X", stats.meter_id);
     ESP_LOGI(TAG, "===========================================================");
 
     if (stats.packet_count > 1) {
@@ -445,8 +429,9 @@ void KamstrupWMBusComponent::process_packet_(const uint8_t *packet_data,
   }
 
   // Check if it's our meter (guard clause)
-  uint8_t meter_id[4] = {packet_data[4], packet_data[5], packet_data[6], packet_data[7]};
+  const uint8_t *meter_id = &packet_data[4];  // 4-byte A-field, little-endian
   if (!this->is_our_meter_id_(meter_id)) {
+    this->id_mismatches_++;  // Count packets from other meters (diagnostic)
     return;  // Not our meter, skip silently
   }
 
@@ -474,9 +459,7 @@ void KamstrupWMBusComponent::process_packet_(const uint8_t *packet_data,
   }
 
   // Update statistics (now that we have frame_type from parsing)
-  uint32_t meter_id_uint = (meter_id[3] << 24) | (meter_id[2] << 16) |
-                           (meter_id[1] << 8) | meter_id[0];
-  this->update_meter_stats_(meter_id_uint, data.frame_type);
+  this->update_meter_stats_(meter_id_from_le_(meter_id), data.frame_type);
 
   // Publish data to sensors
   this->publish_meter_data_(data);
@@ -521,7 +504,7 @@ void KamstrupWMBusComponent::log_radio_status_() {
   bool overflow = rxbytes & 0x80;
 
   // Read RSSI for signal strength
-  uint8_t rssi_raw = this->radio_.read_status_register(0x34);  // RSSI register
+  uint8_t rssi_raw = this->radio_.read_status_register(CC1101_RSSI);
   int16_t rssi_dbm;
   if (rssi_raw >= 128) {
     rssi_dbm = (rssi_raw - 256) / 2 - 74;

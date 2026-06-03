@@ -15,7 +15,6 @@ class KamstrupWMBusComponent;
  * Handles initialization, configuration, state management, and FIFO operations.
  *
  * Responsibility: Pure hardware abstraction - no packet processing or crypto.
- * Extracted from: kamstrup_wmbus.cpp lines 351-482 (hardware interface section)
  */
 class CC1101Radio {
  public:

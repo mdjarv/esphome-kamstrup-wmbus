@@ -7,6 +7,12 @@ namespace kamstrup_wmbus {
 
 static const char *const TAG = "kamstrup_wmbus.multical21";
 
+// Read a 4-byte little-endian unsigned integer from a buffer.
+static uint32_t read_u32_le(const uint8_t *p) {
+  return (uint32_t) p[0] | (uint32_t) p[1] << 8 |
+         (uint32_t) p[2] << 16 | (uint32_t) p[3] << 24;
+}
+
 // ============================================================================
 // Private Helper Methods
 // ============================================================================
@@ -100,21 +106,13 @@ WMBusMeterData Multical21Parser::parse(const uint8_t *plaintext, uint8_t length)
 
   // Extract total water consumption (4 bytes, little-endian, in liters)
   if (length > pos_total + 3) {
-    uint32_t total_liters = plaintext[pos_total] |
-                            (plaintext[pos_total + 1] << 8) |
-                            (plaintext[pos_total + 2] << 16) |
-                            (plaintext[pos_total + 3] << 24);
-    data.total_consumption_m3 = total_liters / 1000.0f;
+    data.total_consumption_m3 = read_u32_le(&plaintext[pos_total]) / 1000.0f;
     ESP_LOGD(TAG, "  Total consumption: %.3f m3", data.total_consumption_m3);
   }
 
   // Extract target water consumption (4 bytes, little-endian, in liters)
   if (length > pos_target + 3) {
-    uint32_t target_liters = plaintext[pos_target] |
-                             (plaintext[pos_target + 1] << 8) |
-                             (plaintext[pos_target + 2] << 16) |
-                             (plaintext[pos_target + 3] << 24);
-    data.target_consumption_m3 = target_liters / 1000.0f;
+    data.target_consumption_m3 = read_u32_le(&plaintext[pos_target]) / 1000.0f;
     ESP_LOGD(TAG, "  Target consumption: %.3f m3", data.target_consumption_m3);
   }
 

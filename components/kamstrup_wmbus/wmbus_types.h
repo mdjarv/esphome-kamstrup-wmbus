@@ -8,22 +8,12 @@ namespace esphome {
 namespace kamstrup_wmbus {
 
 // ============================================================================
-// CC1101 Register Addresses
+// CC1101 Config Registers (only those read back individually in code; the
+// full init set lives as a labeled table in cc1101_radio.cpp)
 // ============================================================================
 
-constexpr uint8_t CC1101_IOCFG2 = 0x00;
-constexpr uint8_t CC1101_IOCFG0 = 0x02;
-constexpr uint8_t CC1101_FIFOTHR = 0x03;
-constexpr uint8_t CC1101_PKTCTRL0 = 0x08;
-constexpr uint8_t CC1101_FREQ2 = 0x0D;
-constexpr uint8_t CC1101_FREQ1 = 0x0E;
-constexpr uint8_t CC1101_FREQ0 = 0x0F;
-constexpr uint8_t CC1101_MDMCFG4 = 0x10;
-constexpr uint8_t CC1101_MDMCFG3 = 0x11;
-constexpr uint8_t CC1101_MDMCFG2 = 0x12;
-constexpr uint8_t CC1101_DEVIATN = 0x15;
-constexpr uint8_t CC1101_MCSM1 = 0x17;
-constexpr uint8_t CC1101_MCSM0 = 0x18;
+constexpr uint8_t CC1101_FREQ2 = 0x0D;    // Frequency control word, high byte
+constexpr uint8_t CC1101_MDMCFG2 = 0x12;  // Modem configuration 2
 
 // ============================================================================
 // CC1101 Command Strobes
@@ -38,11 +28,13 @@ constexpr uint8_t CC1101_SFTX = 0x3B;   // Flush TX FIFO
 constexpr uint8_t CC1101_RXFIFO = 0x3F; // RX FIFO access
 
 // ============================================================================
-// CC1101 Status Registers
+// CC1101 Status Registers (read with the burst bit)
 // ============================================================================
 
-constexpr uint8_t CC1101_MARCSTATE = 0x35;  // Main radio control state
+constexpr uint8_t CC1101_PARTNUM = 0x30;    // Chip part number
+constexpr uint8_t CC1101_VERSION = 0x31;    // Chip version
 constexpr uint8_t CC1101_RSSI = 0x34;       // RSSI value
+constexpr uint8_t CC1101_MARCSTATE = 0x35;  // Main radio control state
 constexpr uint8_t CC1101_RXBYTES = 0x3B;    // RX FIFO bytes
 
 // ============================================================================
@@ -51,16 +43,12 @@ constexpr uint8_t CC1101_RXBYTES = 0x3B;    // RX FIFO bytes
 
 constexpr uint8_t MARCSTATE_IDLE = 0x01;
 constexpr uint8_t MARCSTATE_RX = 0x0D;              // Receive mode (CORRECT per spec!)
-constexpr uint8_t MARCSTATE_RX_END = 0x0E;          // End of packet
-constexpr uint8_t MARCSTATE_RX_RST = 0x0F;          // RX termination
 constexpr uint8_t MARCSTATE_RXFIFO_OVERFLOW = 0x11; // FIFO overflow (ERROR state)
 
 // ============================================================================
-// Read/Write Masks for Register Access
+// Read Masks for Register Access
 // ============================================================================
 
-constexpr uint8_t CC1101_WRITE_SINGLE = 0x00;
-constexpr uint8_t CC1101_WRITE_BURST = 0x40;
 constexpr uint8_t CC1101_READ_SINGLE = 0x80;
 constexpr uint8_t CC1101_READ_BURST = 0xC0;
 
@@ -69,7 +57,6 @@ constexpr uint8_t CC1101_READ_BURST = 0xC0;
 // ============================================================================
 
 constexpr uint8_t MAX_PACKET_SIZE = 64;
-constexpr uint8_t HEADER_SIZE = 16;
 constexpr uint8_t CRC_SIZE = 2;
 constexpr uint16_t CRC_POLY = 0x3D65;
 
@@ -85,17 +72,11 @@ constexpr uint32_t HEALTH_CHECK_INTERVAL_MS = 10000;  // 10 seconds
 // ============================================================================
 
 constexpr uint8_t MIN_WMBUS_PACKET_LENGTH = 10;
-constexpr uint8_t WMBUS_HEADER_SIZE = 18;  // L(1) + header(16) + CRC offset(1)
-constexpr uint8_t MAX_FIFO_READ_BYTES = 70;  // Safety limit for FIFO reads
-constexpr uint8_t INVALID_LENGTH_MARKER = 255;
 
 // ============================================================================
 // Packet Structure Offsets
 // ============================================================================
 
-constexpr uint8_t OFFSET_C_FIELD = 1;
-constexpr uint8_t OFFSET_M_FIELD = 2;
-constexpr uint8_t OFFSET_METER_ID = 4;
 constexpr uint8_t OFFSET_CIPHER_START = 17;
 
 // ============================================================================

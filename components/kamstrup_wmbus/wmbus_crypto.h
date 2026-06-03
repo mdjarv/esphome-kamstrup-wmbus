@@ -14,7 +14,6 @@ namespace kamstrup_wmbus {
  * and AES-128-CTR decryption for wMBUS Mode C packets.
  *
  * Responsibility: Isolated crypto operations with no hardware dependencies.
- * Extracted from: kamstrup_wmbus.cpp lines 615-727
  */
 class WMBusCrypto {
  public:
