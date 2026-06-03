@@ -4,7 +4,7 @@
 #include "esphome/core/log.h"
 
 namespace esphome {
-namespace multical21_wmbus {
+namespace kamstrup_wmbus {
 
 /**
  * @brief Thread-safe ring buffer for ISR-to-loop packet passing
@@ -180,5 +180,5 @@ class WMBusPacketBuffer {
   volatile uint8_t write_idx_;        // Write index (producer)
 };
 
-}  // namespace multical21_wmbus
+}  // namespace kamstrup_wmbus
 }  // namespace esphome

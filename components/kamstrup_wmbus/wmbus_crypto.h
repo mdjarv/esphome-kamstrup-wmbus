@@ -5,7 +5,7 @@
 #include <cstdint>
 
 namespace esphome {
-namespace multical21_wmbus {
+namespace kamstrup_wmbus {
 
 /**
  * @brief Cryptography utilities for wMBUS packets
@@ -14,7 +14,7 @@ namespace multical21_wmbus {
  * and AES-128-CTR decryption for wMBUS Mode C packets.
  *
  * Responsibility: Isolated crypto operations with no hardware dependencies.
- * Extracted from: multical21_wmbus.cpp lines 615-727
+ * Extracted from: kamstrup_wmbus.cpp lines 615-727
  */
 class WMBusCrypto {
  public:
@@ -60,5 +60,5 @@ class WMBusCrypto {
   void build_iv_(const uint8_t *packet, uint8_t *iv);
 };
 
-}  // namespace multical21_wmbus
+}  // namespace kamstrup_wmbus
 }  // namespace esphome

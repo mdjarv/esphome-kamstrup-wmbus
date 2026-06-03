@@ -1,12 +1,12 @@
 #include "cc1101_radio.h"
-#include "multical21_wmbus.h"
+#include "kamstrup_wmbus.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
 
 namespace esphome {
-namespace multical21_wmbus {
+namespace kamstrup_wmbus {
 
-static const char *const RADIO_TAG = "multical21_wmbus.radio";
+static const char *const RADIO_TAG = "kamstrup_wmbus.radio";
 
 // ============================================================================
 // CC1101 Register Configuration for wMBUS Mode C (868.95 MHz)
@@ -62,7 +62,7 @@ static const CC1101Config CC1101_REGISTERS[] = {
 // Initialization
 // ============================================================================
 
-void CC1101Radio::init(Multical21WMBusComponent *component) {
+void CC1101Radio::init(KamstrupWMBusComponent *component) {
   this->component_ = component;
   ESP_LOGD(RADIO_TAG, "CC1101Radio initialized with parent component");
 }
@@ -278,5 +278,5 @@ bool CC1101Radio::is_overflow() {
   return (rxbytes & 0x80) != 0;  // Bit 7 indicates overflow
 }
 
-}  // namespace multical21_wmbus
+}  // namespace kamstrup_wmbus
 }  // namespace esphome

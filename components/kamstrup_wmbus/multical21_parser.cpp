@@ -1,22 +1,22 @@
-#include "wmbus_packet_parser.h"
+#include "multical21_parser.h"
 #include "esphome/core/log.h"
 #include <cstdio>
 
 namespace esphome {
-namespace multical21_wmbus {
+namespace kamstrup_wmbus {
 
-static const char *const TAG = "multical21_wmbus.parser";
+static const char *const TAG = "kamstrup_wmbus.multical21";
 
 // ============================================================================
 // Private Helper Methods
 // ============================================================================
 
-bool WMBusPacketParser::is_long_frame_(const uint8_t *plaintext) {
+bool Multical21Parser::is_long_frame_(const uint8_t *plaintext) {
   // Long frame marker is 0x78 at byte 2 (per Multical21 spec)
   return (plaintext[2] == 0x78);
 }
 
-std::string WMBusPacketParser::decode_status_(uint8_t info_codes) {
+std::string Multical21Parser::decode_status_(uint8_t info_codes) {
   switch (info_codes) {
     case 0x00:
       return "normal";
@@ -41,7 +41,7 @@ std::string WMBusPacketParser::decode_status_(uint8_t info_codes) {
 // Public Parsing Method
 // ============================================================================
 
-WMBusMeterData WMBusPacketParser::parse(const uint8_t *plaintext, uint8_t length) {
+WMBusMeterData Multical21Parser::parse(const uint8_t *plaintext, uint8_t length) {
   WMBusMeterData data;
   data.valid = false;
 
@@ -121,23 +121,23 @@ WMBusMeterData WMBusPacketParser::parse(const uint8_t *plaintext, uint8_t length
   // Extract flow temperature (signed byte, degrees Celsius)
   if (length > pos_flow_temp) {
     data.flow_temperature_c = static_cast<int8_t>(plaintext[pos_flow_temp]);
-    ESP_LOGD(TAG, "  Flow temperature: %d °C", data.flow_temperature_c);
+    ESP_LOGD(TAG, "  Flow temperature: %d C", data.flow_temperature_c);
   }
 
   // Extract ambient temperature (signed byte, degrees Celsius)
   if (length > pos_ambient_temp) {
     data.ambient_temperature_c = static_cast<int8_t>(plaintext[pos_ambient_temp]);
-    ESP_LOGD(TAG, "  Ambient temperature: %d °C", data.ambient_temperature_c);
+    ESP_LOGD(TAG, "  Ambient temperature: %d C", data.ambient_temperature_c);
   }
 
   // Mark as valid if we successfully parsed
   data.valid = true;
-  ESP_LOGI(TAG, "Parsing complete: %.3f m3, status=%s, flow=%d°C, ambient=%d°C",
+  ESP_LOGI(TAG, "Parsing complete: %.3f m3, status=%s, flow=%dC, ambient=%dC",
            data.total_consumption_m3, data.status.c_str(),
            data.flow_temperature_c, data.ambient_temperature_c);
 
   return data;
 }
 
-}  // namespace multical21_wmbus
+}  // namespace kamstrup_wmbus
 }  // namespace esphome

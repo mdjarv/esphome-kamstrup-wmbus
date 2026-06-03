@@ -1,16 +1,30 @@
-#include "multical21_wmbus.h"
+#include "kamstrup_wmbus.h"
+#include "multical21_parser.h"
+#include "flowiq2200_parser.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
 #include <mbedtls/aes.h>
 
 namespace esphome {
-namespace multical21_wmbus {
+namespace kamstrup_wmbus {
 
 // Static member initialization
-Multical21WMBusComponent *Multical21WMBusComponent::isr_instance_ = nullptr;
+KamstrupWMBusComponent *KamstrupWMBusComponent::isr_instance_ = nullptr;
 
-void Multical21WMBusComponent::setup() {
-  ESP_LOGCONFIG(TAG, "Setting up Multical21 wMBUS receiver...");
+void KamstrupWMBusComponent::setup() {
+  // Instantiate the meter-specific parser selected via `meter_model` config.
+  // Radio/CRC/decryption are identical across models; only the parser differs.
+  switch (this->meter_model_) {
+    case MeterModel::FLOWIQ2200:
+      this->parser_ = make_unique<FlowIQ2200Parser>();
+      break;
+    case MeterModel::MULTICAL21:
+    default:
+      this->parser_ = make_unique<Multical21Parser>();
+      break;
+  }
+  ESP_LOGCONFIG(TAG, "Setting up Kamstrup wMBUS receiver (meter model: %s)...",
+                this->parser_->model_name());
 
   // Initialize SPI first
   this->spi_setup();
@@ -41,7 +55,7 @@ void Multical21WMBusComponent::setup() {
   attachInterrupt(digitalPinToInterrupt(this->gdo0_pin_),
                   []() {
                     if (isr_instance_ != nullptr) {
-                      Multical21WMBusComponent::packet_isr_(isr_instance_);
+                      KamstrupWMBusComponent::packet_isr_(isr_instance_);
                     }
                   },
                   FALLING);
@@ -68,14 +82,14 @@ void Multical21WMBusComponent::setup() {
     }
   });
 
-  ESP_LOGCONFIG(TAG, "Multical21 wMBUS receiver setup complete");
+  ESP_LOGCONFIG(TAG, "Kamstrup wMBUS receiver setup complete");
 }
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
-void Multical21WMBusComponent::update_meter_stats_(uint32_t meter_id_uint, const std::string &frame_type) {
+void KamstrupWMBusComponent::update_meter_stats_(uint32_t meter_id_uint, const std::string &frame_type) {
   uint32_t now = millis();
 
   for (auto &stats : this->meter_stats_) {
@@ -115,7 +129,7 @@ void Multical21WMBusComponent::update_meter_stats_(uint32_t meter_id_uint, const
   ESP_LOGI(TAG, "First packet from this meter (frame type: %s)", frame_type.c_str());
 }
 
-bool Multical21WMBusComponent::is_our_meter_id_(const uint8_t *meter_id_le) {
+bool KamstrupWMBusComponent::is_our_meter_id_(const uint8_t *meter_id_le) {
   // meter_id_le is little-endian from packet
   // this->meter_id_ is big-endian from config
   return (meter_id_le[0] == this->meter_id_[3] &&
@@ -124,7 +138,7 @@ bool Multical21WMBusComponent::is_our_meter_id_(const uint8_t *meter_id_le) {
           meter_id_le[3] == this->meter_id_[0]);
 }
 
-bool Multical21WMBusComponent::read_packet_from_fifo_(uint8_t *buffer, uint8_t &length) {
+bool KamstrupWMBusComponent::read_packet_from_fifo_(uint8_t *buffer, uint8_t &length) {
   // CRITICAL: Read ALL bytes from FIFO even if L-field is invalid
   // This prevents FIFO corruption by ensuring garbage packets are fully cleared
 
@@ -181,7 +195,7 @@ bool Multical21WMBusComponent::read_packet_from_fifo_(uint8_t *buffer, uint8_t &
   return false;
 }
 
-bool Multical21WMBusComponent::read_fifo_into_packet_buffer_() {
+bool KamstrupWMBusComponent::read_fifo_into_packet_buffer_() {
   // Check if packet buffer has space
   if (this->packet_buffer_.is_full()) {
     ESP_LOGW(TAG, "Packet buffer full - dropping packet");
@@ -210,7 +224,7 @@ bool Multical21WMBusComponent::read_fifo_into_packet_buffer_() {
   return this->packet_buffer_.push(pkt);
 }
 
-void Multical21WMBusComponent::process_buffered_packets_() {
+void KamstrupWMBusComponent::process_buffered_packets_() {
   PacketBuffer pkt;
   while (this->packet_buffer_.pop(pkt)) {
     // Update last packet time
@@ -221,7 +235,7 @@ void Multical21WMBusComponent::process_buffered_packets_() {
   }
 }
 
-bool Multical21WMBusComponent::validate_packet_structure_(const uint8_t *packet_data, uint8_t length, uint8_t packet_length) {
+bool KamstrupWMBusComponent::validate_packet_structure_(const uint8_t *packet_data, uint8_t length, uint8_t packet_length) {
   // Guard clause: check length validity
   if (length > MAX_PACKET_SIZE || length < MIN_WMBUS_PACKET_LENGTH) {
     ESP_LOGW(TAG, "Invalid packet length: %u", length);
@@ -237,7 +251,7 @@ bool Multical21WMBusComponent::validate_packet_structure_(const uint8_t *packet_
   return true;
 }
 
-bool Multical21WMBusComponent::verify_packet_crc_(const uint8_t *packet_data, uint8_t length) {
+bool KamstrupWMBusComponent::verify_packet_crc_(const uint8_t *packet_data, uint8_t length) {
   uint16_t calculated_crc = WMBusCrypto::calculate_crc(packet_data, length - 1);
   uint16_t packet_crc = (packet_data[length - 1] << 8) | packet_data[length];
 
@@ -252,7 +266,7 @@ bool Multical21WMBusComponent::verify_packet_crc_(const uint8_t *packet_data, ui
   return true;
 }
 
-bool Multical21WMBusComponent::decrypt_packet_payload_(const uint8_t *packet_data, uint8_t length,
+bool KamstrupWMBusComponent::decrypt_packet_payload_(const uint8_t *packet_data, uint8_t length,
                                                         uint8_t *plaintext, uint8_t &plaintext_length) {
   // Convert vector to array for crypto API
   std::array<uint8_t, 16> aes_key_array;
@@ -266,7 +280,7 @@ bool Multical21WMBusComponent::decrypt_packet_payload_(const uint8_t *packet_dat
 // Main Loop
 // ============================================================================
 
-void Multical21WMBusComponent::loop() {
+void KamstrupWMBusComponent::loop() {
   // Guard clause: only process if interrupt fired
   if (!this->packet_ready_) {
     return;
@@ -286,7 +300,7 @@ void Multical21WMBusComponent::loop() {
     attachInterrupt(digitalPinToInterrupt(this->gdo0_pin_),
                     []() {
                       if (isr_instance_ != nullptr) {
-                        Multical21WMBusComponent::packet_isr_(isr_instance_);
+                        KamstrupWMBusComponent::packet_isr_(isr_instance_);
                       }
                     },
                     FALLING);
@@ -300,7 +314,7 @@ void Multical21WMBusComponent::loop() {
   attachInterrupt(digitalPinToInterrupt(this->gdo0_pin_),
                   []() {
                     if (isr_instance_ != nullptr) {
-                      Multical21WMBusComponent::packet_isr_(isr_instance_);
+                      KamstrupWMBusComponent::packet_isr_(isr_instance_);
                     }
                   },
                   FALLING);
@@ -309,7 +323,7 @@ void Multical21WMBusComponent::loop() {
   this->process_buffered_packets_();
 }
 
-void Multical21WMBusComponent::update() {
+void KamstrupWMBusComponent::update() {
   // Periodic update called based on polling interval
   // Print transmission interval statistics ONLY for configured meter
 
@@ -388,8 +402,9 @@ void Multical21WMBusComponent::update() {
   }
 }
 
-void Multical21WMBusComponent::dump_config() {
-  ESP_LOGCONFIG(TAG, "Multical21 wMBUS Receiver:");
+void KamstrupWMBusComponent::dump_config() {
+  ESP_LOGCONFIG(TAG, "Kamstrup wMBUS Receiver:");
+  ESP_LOGCONFIG(TAG, "  Meter Model: %s", this->parser_ ? this->parser_->model_name() : "unset");
   ESP_LOGCONFIG(TAG, "  GDO0 Pin: GPIO%u", this->gdo0_pin_);
   LOG_SENSOR("  ", "Total Consumption", this->total_consumption_sensor_);
   LOG_SENSOR("  ", "Target Consumption", this->target_consumption_sensor_);
@@ -407,7 +422,7 @@ void Multical21WMBusComponent::dump_config() {
 // Packet Processing
 // ============================================================================
 
-void IRAM_ATTR Multical21WMBusComponent::packet_isr_(Multical21WMBusComponent *instance) {
+void IRAM_ATTR KamstrupWMBusComponent::packet_isr_(KamstrupWMBusComponent *instance) {
   // CRITICAL TIMING PATH - Minimal ISR: just set flag and wake loop
   // Per WMBUS_IMPLEMENTATION_SPEC.md Section 5.1:
   // - GDO0 falling edge = packet complete, data in FIFO
@@ -420,7 +435,7 @@ void IRAM_ATTR Multical21WMBusComponent::packet_isr_(Multical21WMBusComponent *i
   instance->enable_loop_soon_any_context();
 }
 
-void Multical21WMBusComponent::process_packet_(const uint8_t *packet_data,
+void KamstrupWMBusComponent::process_packet_(const uint8_t *packet_data,
                                                 uint8_t packet_length) {
   uint8_t length = packet_data[0];
 
@@ -452,7 +467,7 @@ void Multical21WMBusComponent::process_packet_(const uint8_t *packet_data,
   }
 
   // Parse meter data using parser helper
-  WMBusMeterData data = this->parser_.parse(plaintext, plaintext_length);
+  WMBusMeterData data = this->parser_->parse(plaintext, plaintext_length);
   if (!data.valid) {
     ESP_LOGW(TAG, "Failed to parse meter data");
     return;
@@ -474,7 +489,7 @@ void Multical21WMBusComponent::process_packet_(const uint8_t *packet_data,
   ESP_LOGI(TAG, "========================================");
 }
 
-void Multical21WMBusComponent::publish_meter_data_(const WMBusMeterData &data) {
+void KamstrupWMBusComponent::publish_meter_data_(const WMBusMeterData &data) {
   // Publish to ESPHome sensors
   if (this->total_consumption_sensor_ != nullptr) {
     this->total_consumption_sensor_->publish_state(data.total_consumption_m3);
@@ -498,7 +513,7 @@ void Multical21WMBusComponent::publish_meter_data_(const WMBusMeterData &data) {
 // Health Monitoring
 // ============================================================================
 
-void Multical21WMBusComponent::log_radio_status_() {
+void KamstrupWMBusComponent::log_radio_status_() {
   // Just log status for diagnostics, don't process packets
   uint8_t marcstate = this->radio_.get_marcstate();
   uint8_t rxbytes = this->radio_.get_rx_bytes();
@@ -532,5 +547,5 @@ void Multical21WMBusComponent::log_radio_status_() {
   }
 }
 
-}  // namespace multical21_wmbus
+}  // namespace kamstrup_wmbus
 }  // namespace esphome

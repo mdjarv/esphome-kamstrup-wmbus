@@ -1,16 +1,15 @@
-"""Text sensor support for Multical21 wMBUS receiver."""
+"""Text sensor support for Kamstrup wMBUS water meters."""
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import text_sensor
-from esphome.const import CONF_ID
-from . import multical21_wmbus_ns, Multical21WMBusComponent
+from . import kamstrup_wmbus_ns, KamstrupWMBusComponent
 
-CONF_MULTICAL21_WMBUS_ID = "multical21_wmbus_id"
+CONF_KAMSTRUP_WMBUS_ID = "kamstrup_wmbus_id"
 CONF_INFO_CODES = "info_codes"
 
 CONFIG_SCHEMA = cv.Schema(
     {
-        cv.GenerateID(CONF_MULTICAL21_WMBUS_ID): cv.use_id(Multical21WMBusComponent),
+        cv.GenerateID(CONF_KAMSTRUP_WMBUS_ID): cv.use_id(KamstrupWMBusComponent),
         cv.Optional(CONF_INFO_CODES): text_sensor.text_sensor_schema(
             icon="mdi:alert-circle",
         ),
@@ -20,7 +19,7 @@ CONFIG_SCHEMA = cv.Schema(
 
 async def to_code(config):
     """Generate C++ code from config."""
-    parent = await cg.get_variable(config[CONF_MULTICAL21_WMBUS_ID])
+    parent = await cg.get_variable(config[CONF_KAMSTRUP_WMBUS_ID])
 
     if CONF_INFO_CODES in config:
         sens = await text_sensor.new_text_sensor(config[CONF_INFO_CODES])

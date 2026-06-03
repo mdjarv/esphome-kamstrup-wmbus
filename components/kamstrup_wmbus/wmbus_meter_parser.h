@@ -1,17 +1,29 @@
 #pragma once
 
-#include "wmbus_types.h"
 #include <cstdint>
 #include <string>
 
 namespace esphome {
-namespace multical21_wmbus {
+namespace kamstrup_wmbus {
+
+/**
+ * @brief Selects which meter-specific parser the component instantiates.
+ *
+ * The radio, CRC, and AES-128-CTR decryption layers are identical across
+ * Kamstrup meters - only the decrypted payload layout differs. Each value
+ * here maps to a concrete WMBusMeterParser implementation.
+ */
+enum class MeterModel : uint8_t {
+  MULTICAL21 = 0,
+  FLOWIQ2200 = 1,
+};
 
 /**
  * @brief Parsed meter data structure
  *
  * Data Transfer Object (DTO) holding all meter readings extracted
- * from a decrypted wMBUS packet.
+ * from a decrypted wMBUS packet. Shared across all meter models -
+ * every supported Kamstrup meter reports this same set of fields.
  */
 struct WMBusMeterData {
   float total_consumption_m3;    // Total water consumption in cubic meters
@@ -24,7 +36,7 @@ struct WMBusMeterData {
   // Frame analysis fields
   std::string frame_type;        // "compact" or "long" - for debugging/analysis
   uint8_t plaintext_length;      // Length of decrypted plaintext in bytes
-  uint8_t frame_marker;          // Byte 2 of plaintext (0x78 = long, other = compact)
+  uint8_t frame_marker;          // Byte 2 of plaintext (frame format indicator)
 
   // Constructor with default invalid state
   WMBusMeterData() :
@@ -40,50 +52,32 @@ struct WMBusMeterData {
 };
 
 /**
- * @brief Parser for Multical21 wMBUS packet payloads
+ * @brief Abstract interface for meter-specific payload parsers (strategy pattern)
  *
- * Extracts meter readings from decrypted wMBUS data packets.
- * Supports both compact and long frame formats.
+ * The component owns one concrete parser, chosen from the configured MeterModel.
+ * Implementations turn a decrypted plaintext buffer into a WMBusMeterData.
  *
- * Responsibility: Pure data extraction - no hardware, crypto, or ESPHome dependencies.
- * Extracted from: multical21_wmbus.cpp lines 615-698
+ * Responsibility: Pure data extraction - no hardware, crypto, or ESPHome
+ * component dependencies (logging is allowed).
  */
-class WMBusPacketParser {
+class WMBusMeterParser {
  public:
+  virtual ~WMBusMeterParser() = default;
+
   /**
    * @brief Parse decrypted plaintext into meter readings
-   *
-   * Detects frame type (compact vs long) and extracts all meter data fields.
-   * Handles variable field positions based on frame type.
    *
    * @param plaintext Decrypted payload data
    * @param length Length of plaintext in bytes
    * @return WMBusMeterData structure with parsed values (check .valid flag)
    */
-  WMBusMeterData parse(const uint8_t *plaintext, uint8_t length);
-
- private:
-  /**
-   * @brief Detect if plaintext is a long frame format
-   *
-   * Long frames have different field positions than compact frames.
-   *
-   * @param plaintext Decrypted payload data
-   * @return true if long frame (0x78 marker), false if compact frame
-   */
-  bool is_long_frame_(const uint8_t *plaintext);
+  virtual WMBusMeterData parse(const uint8_t *plaintext, uint8_t length) = 0;
 
   /**
-   * @brief Decode meter status code to human-readable string
-   *
-   * Maps info code byte to descriptive status strings:
-   * 0x00 = "normal", 0x01 = "dry", 0x02 = "reverse", etc.
-   *
-   * @param info_codes Raw status byte from meter
-   * @return Status string (e.g., "normal", "leak", "code_0x05")
+   * @brief Short human-readable name of the meter model this parser handles.
    */
-  std::string decode_status_(uint8_t info_codes);
+  virtual const char *model_name() const = 0;
 };
 
-}  // namespace multical21_wmbus
+}  // namespace kamstrup_wmbus
 }  // namespace esphome

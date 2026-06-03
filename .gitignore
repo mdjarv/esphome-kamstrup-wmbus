@@ -3,6 +3,9 @@ secrets.yaml
 *.bin
 .esphome/
 
+# Personal working config (per-device, not for the repo)
+water-meter.yaml
+
 # IDE
 .vscode/
 .idea/

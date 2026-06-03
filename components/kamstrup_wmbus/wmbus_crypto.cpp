@@ -4,9 +4,9 @@
 #include <cstring>
 
 namespace esphome {
-namespace multical21_wmbus {
+namespace kamstrup_wmbus {
 
-static const char *const TAG = "multical21_wmbus.crypto";
+static const char *const TAG = "kamstrup_wmbus.crypto";
 
 // ============================================================================
 // CRC Calculation
@@ -138,5 +138,5 @@ bool WMBusCrypto::decrypt_packet(const uint8_t *packet,
   return true;
 }
 
-}  // namespace multical21_wmbus
+}  // namespace kamstrup_wmbus
 }  // namespace esphome

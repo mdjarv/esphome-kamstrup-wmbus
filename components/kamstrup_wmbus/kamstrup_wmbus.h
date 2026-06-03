@@ -7,20 +7,21 @@
 #include "wmbus_types.h"
 #include "cc1101_radio.h"
 #include "wmbus_crypto.h"
-#include "wmbus_packet_parser.h"
+#include "wmbus_meter_parser.h"
 #include "wmbus_packet_buffer.h"
+#include <memory>
 
 namespace esphome {
-namespace multical21_wmbus {
+namespace kamstrup_wmbus {
 
-static const char *const TAG = "multical21_wmbus";
+static const char *const TAG = "kamstrup_wmbus";
 
-class Multical21WMBusComponent : public PollingComponent, public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST,
+class KamstrupWMBusComponent : public PollingComponent, public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST,
                                                                                   spi::CLOCK_POLARITY_LOW,
                                                                                   spi::CLOCK_PHASE_LEADING,
                                                                                   spi::DATA_RATE_4MHZ> {
  public:
-  Multical21WMBusComponent() = default;
+  KamstrupWMBusComponent() = default;
 
   // Component lifecycle methods
   void setup() override;
@@ -33,6 +34,7 @@ class Multical21WMBusComponent : public PollingComponent, public spi::SPIDevice<
   void set_meter_id(const std::vector<uint8_t> &meter_id) { this->meter_id_ = meter_id; }
   void set_aes_key(const std::vector<uint8_t> &aes_key) { this->aes_key_ = aes_key; }
   void set_gdo0_pin(uint8_t pin) { this->gdo0_pin_ = pin; }
+  void set_meter_model(MeterModel model) { this->meter_model_ = model; }
 
   // Sensor setters
   void set_total_consumption_sensor(sensor::Sensor *sensor) { this->total_consumption_sensor_ = sensor; }
@@ -61,20 +63,21 @@ class Multical21WMBusComponent : public PollingComponent, public spi::SPIDevice<
   void log_radio_status_();
 
   // Interrupt handling - CRITICAL TIMING PATH
-  static void IRAM_ATTR packet_isr_(Multical21WMBusComponent *instance);
-  static Multical21WMBusComponent *isr_instance_;
+  static void IRAM_ATTR packet_isr_(KamstrupWMBusComponent *instance);
+  static KamstrupWMBusComponent *isr_instance_;
   volatile bool packet_ready_{false};
 
   // Helper classes (composition)
   CC1101Radio radio_;
   WMBusCrypto crypto_;
-  WMBusPacketParser parser_;
+  std::unique_ptr<WMBusMeterParser> parser_;  // Meter-specific, chosen at setup()
   WMBusPacketBuffer<4> packet_buffer_;
 
   // Configuration
   std::vector<uint8_t> meter_id_;
   std::vector<uint8_t> aes_key_;
   uint8_t gdo0_pin_;
+  MeterModel meter_model_{MeterModel::MULTICAL21};
 
   // Sensors
   sensor::Sensor *total_consumption_sensor_{nullptr};
@@ -95,5 +98,5 @@ class Multical21WMBusComponent : public PollingComponent, public spi::SPIDevice<
   std::vector<MeterStats> meter_stats_;
 };
 
-}  // namespace multical21_wmbus
+}  // namespace kamstrup_wmbus
 }  // namespace esphome

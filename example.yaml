@@ -41,8 +41,12 @@ external_components:
       path: components
 
 sensor:
-  - platform: multical21_wmbus
+  - platform: kamstrup_wmbus
     id: water_meter_component
+    # Meter model selects the payload parser. Supported: multical21, flowiq2200.
+    # NOTE: flowiq2200 is work-in-progress - it logs the decrypted telegram for
+    # field mapping but does not yet publish readings.
+    meter_model: multical21
     cs_pin: 7
     gdo0_pin: 3
     meter_id: !secret meter_id
@@ -61,7 +65,7 @@ sensor:
       name: "Ambient Temperature"
 
 text_sensor:
-  - platform: multical21_wmbus
-    multical21_wmbus_id: water_meter_component
+  - platform: kamstrup_wmbus
+    kamstrup_wmbus_id: water_meter_component
     info_codes:
       name: "Meter Status"

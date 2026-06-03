@@ -3,10 +3,10 @@
 #include "wmbus_types.h"
 
 namespace esphome {
-namespace multical21_wmbus {
+namespace kamstrup_wmbus {
 
 // Forward declaration to avoid circular dependency
-class Multical21WMBusComponent;
+class KamstrupWMBusComponent;
 
 /**
  * @brief CC1101 radio hardware abstraction layer
@@ -15,7 +15,7 @@ class Multical21WMBusComponent;
  * Handles initialization, configuration, state management, and FIFO operations.
  *
  * Responsibility: Pure hardware abstraction - no packet processing or crypto.
- * Extracted from: multical21_wmbus.cpp lines 351-482 (hardware interface section)
+ * Extracted from: kamstrup_wmbus.cpp lines 351-482 (hardware interface section)
  */
 class CC1101Radio {
  public:
@@ -24,9 +24,9 @@ class CC1101Radio {
    *
    * Must be called before any other operations.
    *
-   * @param component Pointer to parent Multical21WMBusComponent for SPI access
+   * @param component Pointer to parent KamstrupWMBusComponent for SPI access
    */
-  void init(Multical21WMBusComponent *component);
+  void init(KamstrupWMBusComponent *component);
 
   /**
    * @brief Reset CC1101 chip via software command
@@ -124,7 +124,7 @@ class CC1101Radio {
   bool is_overflow();
 
  private:
-  Multical21WMBusComponent *component_{nullptr};
+  KamstrupWMBusComponent *component_{nullptr};
 
   /**
    * @brief Send command strobe to CC1101
@@ -141,5 +141,5 @@ class CC1101Radio {
   void wait_for_miso_low_();
 };
 
-}  // namespace multical21_wmbus
+}  // namespace kamstrup_wmbus
 }  // namespace esphome

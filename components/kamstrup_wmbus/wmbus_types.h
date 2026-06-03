@@ -5,7 +5,7 @@
 #include <vector>
 
 namespace esphome {
-namespace multical21_wmbus {
+namespace kamstrup_wmbus {
 
 // ============================================================================
 // CC1101 Register Addresses
@@ -133,5 +133,5 @@ struct MeterStats {
   std::string last_frame_type;  // "compact" or "long"
 };
 
-}  // namespace multical21_wmbus
+}  // namespace kamstrup_wmbus
 }  // namespace esphome

@@ -1,4 +1,4 @@
-"""ESPHome component for Multical21 wMBUS receiver with CC1101 radio."""
+"""ESPHome component for Kamstrup wMBUS water meters with CC1101 radio."""
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import sensor, spi
@@ -15,11 +15,12 @@ from esphome.const import (
     ICON_WATER,
     ICON_THERMOMETER,
 )
-from . import multical21_wmbus_ns, Multical21WMBusComponent
+from . import kamstrup_wmbus_ns, KamstrupWMBusComponent, METER_MODELS
 
 DEPENDENCIES = ["spi"]
 AUTO_LOAD = ["sensor", "text_sensor"]
 
+CONF_METER_MODEL = "meter_model"
 CONF_METER_ID = "meter_id"
 CONF_AES_KEY = "aes_key"
 CONF_GDO0_PIN = "gdo0_pin"
@@ -55,7 +56,10 @@ def validate_meter_id(value):
 CONFIG_SCHEMA = (
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(Multical21WMBusComponent),
+            cv.GenerateID(): cv.declare_id(KamstrupWMBusComponent),
+            cv.Optional(CONF_METER_MODEL, default="multical21"): cv.enum(
+                METER_MODELS, lower=True
+            ),
             cv.Required(CONF_METER_ID): validate_meter_id,
             cv.Required(CONF_AES_KEY): validate_aes_key,
             cv.Required(CONF_GDO0_PIN): pins.gpio_input_pin_schema,
@@ -99,6 +103,9 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await spi.register_spi_device(var, config)
+
+    # Select meter-specific payload parser
+    cg.add(var.set_meter_model(config[CONF_METER_MODEL]))
 
     # Set meter ID (4 bytes)
     meter_id_str = config[CONF_METER_ID].replace(" ", "").replace(":", "")

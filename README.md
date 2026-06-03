@@ -77,9 +77,9 @@ Add the following to your ESPHome YAML configuration:
 external_components:
   - source:
       type: git
-      url: https://github.com/mdjarv/esphome-multical21
+      url: https://github.com/mdjarv/esphome-kamstrup-wmbus
       ref: main  # or specify a version tag like v1.0.0
-    components: [ multical21_wmbus ]
+    components: [ kamstrup_wmbus ]
 ```
 
 **Complete Example Configuration:**
@@ -98,9 +98,9 @@ esp32:
 external_components:
   - source:
       type: git
-      url: https://github.com/mdjarv/esphome-multical21
+      url: https://github.com/mdjarv/esphome-kamstrup-wmbus
       ref: master
-    components: [ multical21_wmbus ]
+    components: [ kamstrup_wmbus ]
 
 # Required: SPI bus configuration
 spi:
@@ -110,7 +110,7 @@ spi:
 
 # Configure the water meter sensor
 sensor:
-  - platform: multical21_wmbus
+  - platform: kamstrup_wmbus
     id: water_meter_component
     cs_pin: GPIO7         # SPI chip select
     gdo0_pin: GPIO3       # Interrupt pin
@@ -129,8 +129,8 @@ sensor:
       name: "Ambient Temperature"
 
 text_sensor:
-  - platform: multical21_wmbus
-    multical21_wmbus_id: water_meter_component
+  - platform: kamstrup_wmbus
+    kamstrup_wmbus_id: water_meter_component
     info_codes:
       name: "Meter Status"
 
@@ -159,7 +159,7 @@ wifi:
 If you want to modify the component or use it offline, clone the repository:
 
 ```bash
-git clone https://github.com/mdjarv/esphome-multical21.git
+git clone https://github.com/mdjarv/esphome-kamstrup-wmbus.git
 ```
 
 Then reference it locally in your config:
@@ -168,8 +168,8 @@ Then reference it locally in your config:
 external_components:
   - source:
       type: local
-      path: /path/to/esphome-multical21/components
-    components: [ multical21_wmbus ]
+      path: /path/to/esphome-kamstrup-wmbus/components
+    components: [ kamstrup_wmbus ]
 ```
 
 Or if you're working in the cloned repository directory:
@@ -249,9 +249,9 @@ This component requires three main sections in your ESPHome configuration:
 external_components:
   - source:
       type: git
-      url: https://github.com/mdjarv/esphome-multical21
+      url: https://github.com/mdjarv/esphome-kamstrup-wmbus
       ref: main
-    components: [ multical21_wmbus ]
+    components: [ kamstrup_wmbus ]
 ```
 
 #### 2. SPI Bus Configuration
@@ -267,7 +267,7 @@ spi:
 
 ```yaml
 sensor:
-  - platform: multical21_wmbus
+  - platform: kamstrup_wmbus
     id: water_meter_component
     cs_pin: GPIO7         # SPI chip select
     gdo0_pin: GPIO3       # Interrupt pin
@@ -289,8 +289,8 @@ sensor:
       name: "Ambient Temperature"
 
 text_sensor:
-  - platform: multical21_wmbus
-    multical21_wmbus_id: water_meter_component  # Must match sensor id above
+  - platform: kamstrup_wmbus
+    kamstrup_wmbus_id: water_meter_component  # Must match sensor id above
     info_codes:
       name: "Meter Status"
 ```
@@ -310,9 +310,9 @@ aes_key: "B8F4E2D1C6A59B3E7F8D2A4C6E9B1F5A"            # 32 hex characters
 external_components:
   - source:
       type: git
-      url: https://github.com/mdjarv/esphome-multical21
+      url: https://github.com/mdjarv/esphome-kamstrup-wmbus
       ref: main  # Use 'main' for latest, or 'v1.0.0' for specific version
-    components: [ multical21_wmbus ]
+    components: [ kamstrup_wmbus ]
     refresh: 1d  # Optional: how often to check for updates (default: never)
 ```
 
@@ -321,8 +321,8 @@ external_components:
 external_components:
   - source:
       type: local
-      path: /path/to/esphome-multical21/components
-    components: [ multical21_wmbus ]
+      path: /path/to/esphome-kamstrup-wmbus/components
+    components: [ kamstrup_wmbus ]
 ```
 
 **Version Pinning:**
@@ -385,9 +385,9 @@ esphome logs example.yaml
 
 Expected log output:
 ```
-[I][multical21_wmbus:xxx] CC1101 in RX mode
-[I][multical21_wmbus.parser:xxx] >>> Frame Type: compact (marker=0x79, length=19 bytes) <<<
-[I][multical21_wmbus:xxx] Status: normal (0x00)
+[I][kamstrup_wmbus:xxx] CC1101 in RX mode
+[I][kamstrup_wmbus.parser:xxx] >>> Frame Type: compact (marker=0x79, length=19 bytes) <<<
+[I][kamstrup_wmbus:xxx] Status: normal (0x00)
 [D][sensor:xxx] 'Water Total': Sending state 123.456 m³
 ```
 
@@ -500,17 +500,18 @@ The component implements:
 ### Project Structure
 
 ```
-esphome-multical21/
+esphome-kamstrup-wmbus/
 ├── components/
-│   └── multical21_wmbus/
+│   └── kamstrup_wmbus/
 │       ├── __init__.py                # Python package marker
 │       ├── sensor.py                  # Sensor config validation
 │       ├── text_sensor.py             # Text sensor config validation
-│       ├── multical21_wmbus.h         # Main component header
-│       ├── multical21_wmbus.cpp       # Main component implementation
+│       ├── kamstrup_wmbus.h/cpp       # Main component
 │       ├── cc1101_radio.h/cpp         # CC1101 radio driver
 │       ├── wmbus_crypto.h/cpp         # AES decryption
-│       ├── wmbus_packet_parser.h/cpp  # Packet parsing logic
+│       ├── wmbus_meter_parser.h       # Parser interface + shared data types
+│       ├── multical21_parser.h/cpp    # Multical21 payload parser
+│       ├── flowiq2200_parser.h/cpp    # flowIQ 2200 payload parser (WIP)
 │       ├── wmbus_packet_buffer.h      # Packet buffering
 │       └── wmbus_types.h              # Type definitions
 ├── example.yaml                        # Example configuration
