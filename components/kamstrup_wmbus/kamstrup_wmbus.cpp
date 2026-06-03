@@ -12,6 +12,17 @@ namespace kamstrup_wmbus {
 // Static member initialization
 KamstrupWMBusComponent *KamstrupWMBusComponent::isr_instance_ = nullptr;
 
+// Decode a wMBUS 2-byte manufacturer code (M-field) into its 3-letter name.
+// Each letter is 5 bits, value = letter - 64 (A=1..Z=26). Kamstrup = "KAM".
+static std::string wmbus_manufacturer(uint16_t code) {
+  char m[4];
+  m[0] = (char) (((code >> 10) & 0x1F) + 64);
+  m[1] = (char) (((code >> 5) & 0x1F) + 64);
+  m[2] = (char) ((code & 0x1F) + 64);
+  m[3] = '\0';
+  return std::string(m);
+}
+
 void KamstrupWMBusComponent::attach_packet_interrupt_() {
   attachInterrupt(digitalPinToInterrupt(this->gdo0_pin_),
                   []() {
@@ -430,6 +441,14 @@ void KamstrupWMBusComponent::process_packet_(const uint8_t *packet_data,
 
   // Check if it's our meter (guard clause)
   const uint8_t *meter_id = &packet_data[4];  // 4-byte A-field, little-endian
+
+  // Diagnostic: log every valid frame heard on the air (manufacturer + ID +
+  // version/type), so we can see which meters are in range before filtering.
+  uint16_t mfr_code = packet_data[2] | (packet_data[3] << 8);
+  ESP_LOGI(TAG, ">>> RX FRAME: id=%08X mfr=%s ver=0x%02X type=0x%02X len=%u <<<",
+           meter_id_from_le_(meter_id), wmbus_manufacturer(mfr_code).c_str(),
+           packet_data[8], packet_data[9], length);
+
   if (!this->is_our_meter_id_(meter_id)) {
     this->id_mismatches_++;  // Count packets from other meters (diagnostic)
     return;  // Not our meter, skip silently
