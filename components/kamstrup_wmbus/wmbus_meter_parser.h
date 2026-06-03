@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
 #include <string>
 
 namespace esphome {
@@ -27,9 +28,9 @@ enum class MeterModel : uint8_t {
  */
 struct WMBusMeterData {
   float total_consumption_m3;    // Total water consumption in cubic meters
-  float target_consumption_m3;   // Target/billing consumption in cubic meters
-  int8_t flow_temperature_c;     // Flow temperature in degrees Celsius
-  int8_t ambient_temperature_c;  // Ambient temperature in degrees Celsius
+  float target_consumption_m3;   // Target/billing consumption in cubic meters (NaN = unavailable)
+  float flow_temperature_c;      // Flow temperature in degrees Celsius (NaN = unavailable)
+  float ambient_temperature_c;   // Ambient temperature in degrees Celsius (NaN = unavailable)
   std::string status;            // Human-readable meter status (e.g., "normal", "leak")
   bool valid;                    // True if parsing succeeded, false on error
 
@@ -41,9 +42,9 @@ struct WMBusMeterData {
   // Constructor with default invalid state
   WMBusMeterData() :
     total_consumption_m3(0.0f),
-    target_consumption_m3(0.0f),
-    flow_temperature_c(0),
-    ambient_temperature_c(0),
+    target_consumption_m3(NAN),
+    flow_temperature_c(NAN),
+    ambient_temperature_c(NAN),
     status("unknown"),
     valid(false),
     frame_type("unknown"),

@@ -119,20 +119,20 @@ WMBusMeterData Multical21Parser::parse(const uint8_t *plaintext, uint8_t length)
   // Extract flow temperature (signed byte, degrees Celsius)
   if (length > pos_flow_temp) {
     data.flow_temperature_c = static_cast<int8_t>(plaintext[pos_flow_temp]);
-    ESP_LOGD(TAG, "  Flow temperature: %d C", data.flow_temperature_c);
+    ESP_LOGD(TAG, "  Flow temperature: %d C", (int) data.flow_temperature_c);
   }
 
   // Extract ambient temperature (signed byte, degrees Celsius)
   if (length > pos_ambient_temp) {
     data.ambient_temperature_c = static_cast<int8_t>(plaintext[pos_ambient_temp]);
-    ESP_LOGD(TAG, "  Ambient temperature: %d C", data.ambient_temperature_c);
+    ESP_LOGD(TAG, "  Ambient temperature: %d C", (int) data.ambient_temperature_c);
   }
 
   // Mark as valid if we successfully parsed
   data.valid = true;
   ESP_LOGI(TAG, "Parsing complete: %.3f m3, status=%s, flow=%dC, ambient=%dC",
            data.total_consumption_m3, data.status.c_str(),
-           data.flow_temperature_c, data.ambient_temperature_c);
+           (int) data.flow_temperature_c, (int) data.ambient_temperature_c);
 
   return data;
 }
