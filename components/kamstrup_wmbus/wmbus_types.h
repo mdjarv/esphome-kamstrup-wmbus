@@ -64,7 +64,7 @@ constexpr uint16_t CRC_POLY = 0x3D65;
 // Timeout Constants
 // ============================================================================
 
-constexpr uint32_t RECEIVE_TIMEOUT_MS = 300000;  // 5 minutes
+constexpr uint32_t RECEIVE_TIMEOUT_MS = 180000;  // 3 minutes (recovery watchdog)
 constexpr uint32_t HEALTH_CHECK_INTERVAL_MS = 10000;  // 10 seconds
 
 // ============================================================================

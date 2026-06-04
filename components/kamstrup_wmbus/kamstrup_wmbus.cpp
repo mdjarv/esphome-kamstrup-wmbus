@@ -101,11 +101,14 @@ void KamstrupWMBusComponent::setup() {
     this->log_radio_status_();
   });
 
-  // Setup timeout check
+  // Recovery watchdog: if we have not decoded a VALID frame from our meter in a
+  // while, fully reset+reconfigure the radio. Keyed off valid frames (not noise)
+  // so neighbourhood noise can't mask a stalled receiver and block recovery.
   this->set_interval("timeout_check", 30000, [this]() {  // Check every 30 seconds
     uint32_t now = millis();
     if (now - this->last_packet_time_ > RECEIVE_TIMEOUT_MS) {
-      ESP_LOGW(TAG, "No packets received for 5 minutes, restarting radio");
+      ESP_LOGW(TAG, "No valid meter frame in %u s, restarting radio",
+               RECEIVE_TIMEOUT_MS / 1000);
       radio_.reset();
       radio_.configure();
       radio_.start_rx();
@@ -253,10 +256,8 @@ bool KamstrupWMBusComponent::read_fifo_into_packet_buffer_() {
 void KamstrupWMBusComponent::process_buffered_packets_() {
   PacketBuffer pkt;
   while (this->packet_buffer_.pop(pkt)) {
-    // Update last packet time
-    this->last_packet_time_ = pkt.timestamp;
-
-    // Process packet
+    // Note: last_packet_time_ is updated only on a VALID frame from our meter
+    // (in process_packet_), so the recovery watchdog ignores noise.
     this->process_packet_(pkt.data, pkt.length);
   }
 }
@@ -483,7 +484,8 @@ void KamstrupWMBusComponent::process_packet_(const uint8_t *packet_data,
   // Publish data to sensors
   this->publish_meter_data_(data);
 
-  // Success!
+  // Success! Mark valid reception so the recovery watchdog stays satisfied.
+  this->last_packet_time_ = millis();
   this->packets_valid_++;
   ESP_LOGI(TAG, "========================================");
   ESP_LOGI(TAG, "Packet processed successfully!");
