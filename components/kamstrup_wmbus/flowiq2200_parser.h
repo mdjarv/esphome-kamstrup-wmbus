@@ -12,10 +12,12 @@ namespace kamstrup_wmbus {
  * The flowIQ 2200 uses the same radio/CRC/AES-128-CTR stack as the Multical21
  * but a different decrypted payload layout.
  *
- * Current state: the total volume field is mapped and confirmed against a real
- * meter. Target volume, flow/ambient temperature and status are not yet mapped
- * and are reported as unavailable (NaN). The full plaintext is still logged at
- * DEBUG so those remaining fields can be mapped from more telegrams.
+ * Current state: NO fields are reliably mapped yet. Comparing two compact
+ * telegrams showed the value at [11..12] is a per-transmission counter, not the
+ * total (it changed 404 -> 568 between captures). All readings are therefore
+ * reported as unavailable (NaN) until a FULL frame (marker 0x78), which carries
+ * explicit M-Bus DIF/VIF records, lets us map fields unambiguously. The parser
+ * logs every plaintext (and flags full frames) to support that mapping.
  */
 class FlowIQ2200Parser : public WMBusMeterParser {
  public:
