@@ -1,12 +1,26 @@
-# Multical21 wMBUS Receiver - ESPHome Component
+# Kamstrup wMBUS Receiver - ESPHome Component
 
-An ESPHome external component for reading Kamstrup Multical21 water meters via wMBUS (Wireless M-Bus) protocol using an ESP32-C3 and CC1101 sub-GHz radio module.
+An ESPHome external component for reading Kamstrup water meters via wMBUS
+(Wireless M-Bus) using an ESP32-C3 and a CC1101 sub-GHz radio module.
+
+## Supported Meters
+
+| Meter | `meter_model` | Status | Sensors published |
+|-------|---------------|--------|-------------------|
+| **Kamstrup Multical21** | `multical21` (default) | Fully supported | total, target, flow temp, ambient temp, status |
+| **Kamstrup flowIQ 2200** | `flowiq2200` | Partial (work in progress) | total volume only — see note below |
+
+> **flowIQ 2200 note:** Only the total volume is decoded today. Target,
+> temperatures, and status are not yet mapped and will report as *unavailable*.
+> If you own a flowIQ 2200 and can capture a "full" frame (marker `0x78`), the
+> logs print the decrypted telegram so the remaining fields can be mapped — see
+> [Troubleshooting](#troubleshooting). Contributions welcome.
 
 ## Features
 
 - **Real-time water consumption monitoring** (total and target values in m³)
-- **Temperature sensors** (flow and ambient temperatures)
-- **Status monitoring** (meter info codes)
+- **Temperature sensors** (flow and ambient temperatures) — Multical21
+- **Status monitoring** (meter info codes) — Multical21
 - **Automatic packet decryption** using AES-128-CTR
 - **CRC validation** per EN 13757-4 standard
 - **Radio health monitoring** with automatic recovery
@@ -18,7 +32,7 @@ An ESPHome external component for reading Kamstrup Multical21 water meters via w
 
 1. **ESP32-C3 Super Mini** - Microcontroller board
 2. **CC1101 Sub-GHz Radio Module** - 868 MHz version for European wMBUS
-3. **Kamstrup Multical21 Water Meter** - with wMBUS transmitter
+3. **A supported Kamstrup water meter** - Multical21 or flowIQ 2200 with wMBUS transmitter
 
 ### Wiring
 
@@ -60,6 +74,14 @@ Connect the CC1101 to ESP32-C3 as follows:
 - **SPI component** (declared as dependency, loaded automatically)
 - **Home Assistant** (optional, for integration)
 
+## Quick Start
+
+1. Gather your **meter ID** and **AES key** (see [Obtain Required Information](#obtain-required-information)).
+2. Create a `secrets.yaml` with your WiFi, API key, OTA password, meter ID, and AES key.
+3. Copy the [Complete Example Configuration](#complete-example-configuration), set `meter_model` to match your meter.
+4. Flash with `esphome run your-config.yaml`.
+5. Watch the logs for `CC1101 in RX mode`, then for `Sending state` once a packet decodes.
+
 ## Installation
 
 This component can be added to your ESPHome configuration in two ways:
@@ -69,7 +91,8 @@ This component can be added to your ESPHome configuration in two ways:
 
 ### Method 1: External Component from GitHub (Recommended)
 
-The easiest way to use this component is to reference it directly from GitHub in your ESPHome configuration. ESPHome will automatically download and use it.
+The easiest way to use this component is to reference it directly from GitHub in
+your ESPHome configuration. ESPHome will automatically download and use it.
 
 Add the following to your ESPHome YAML configuration:
 
@@ -78,11 +101,14 @@ external_components:
   - source:
       type: git
       url: https://github.com/mdjarv/esphome-kamstrup-wmbus
-      ref: main  # or specify a version tag like v1.0.0
+      ref: master  # latest; or pin to a release tag like v0.1.5
     components: [ kamstrup_wmbus ]
 ```
 
-**Complete Example Configuration:**
+> The default branch is **`master`** — there is no `main` branch. Using
+> `ref: main` will fail with "couldn't find remote ref main".
+
+#### Complete Example Configuration
 
 ```yaml
 esphome:
@@ -112,6 +138,10 @@ spi:
 sensor:
   - platform: kamstrup_wmbus
     id: water_meter_component
+
+    # Selects the payload parser. Supported: multical21 (default), flowiq2200.
+    meter_model: multical21
+
     cs_pin: GPIO7         # SPI chip select
     gdo0_pin: GPIO3       # Interrupt pin
 
@@ -154,6 +184,10 @@ wifi:
     password: "fallback12345"
 ```
 
+> **flowIQ 2200 users:** set `meter_model: flowiq2200` and keep only the
+> `total_consumption` sensor for now — the other sensors will report
+> *unavailable* until those fields are mapped.
+
 ### Method 2: Local Development
 
 If you want to modify the component or use it offline, clone the repository:
@@ -186,12 +220,14 @@ external_components:
 Before configuring, you need two pieces of information from your water meter:
 
 #### Meter Serial Number
-Look at your Multical21 meter - the serial number is printed on the device label. It's 8 hexadecimal digits.
+Look at your meter - the serial number is printed on the device label. It's 8
+hexadecimal digits. Enter it exactly as printed.
 
 **Example:** `3A9F7C2E` (yours will be different)
 
 #### AES Encryption Key
-Contact your water utility company and request the AES encryption key for your meter. You'll need to provide your meter serial number.
+Contact your water utility company and request the AES encryption key for your
+meter. You'll need to provide your meter serial number.
 
 The key is 16 bytes (32 hexadecimal characters).
 
@@ -199,7 +235,8 @@ The key is 16 bytes (32 hexadecimal characters).
 
 ### Configure Secrets
 
-Create a `secrets.yaml` file next to your ESPHome configuration:
+Copy `secrets.yaml.example` to `secrets.yaml` next to your ESPHome
+configuration, then fill in your values:
 
 ```yaml
 # WiFi credentials
@@ -218,8 +255,8 @@ aes_key: "B8F4E2D1C6A59B3E7F8D2A4C6E9B1F5A"            # Your meter's AES key
 **🔒 Security Note:**
 - Always use `secrets.yaml` for sensitive data - never hardcode secrets in your config
 - The AES key is **CRITICAL** - it decrypts all your meter data
-- Add `secrets.yaml` to `.gitignore` to prevent accidental commits
-- Generate API encryption key: `esphome wizard` or any base64 generator
+- `secrets.yaml` is already in `.gitignore` to prevent accidental commits
+- Generate the API encryption key with `openssl rand -base64 32` (or `esphome wizard`)
 
 ### Flash the Device
 
@@ -250,7 +287,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/mdjarv/esphome-kamstrup-wmbus
-      ref: main
+      ref: master
     components: [ kamstrup_wmbus ]
 ```
 
@@ -269,8 +306,10 @@ spi:
 sensor:
   - platform: kamstrup_wmbus
     id: water_meter_component
-    cs_pin: GPIO7         # SPI chip select
-    gdo0_pin: GPIO3       # Interrupt pin
+
+    meter_model: multical21   # Optional, default. Or: flowiq2200
+    cs_pin: GPIO7             # SPI chip select
+    gdo0_pin: GPIO3           # Interrupt pin
 
     # SECURITY: Use secrets.yaml for sensitive data!
     meter_id: !secret meter_id    # Your meter serial number (8 hex digits)
@@ -303,6 +342,17 @@ aes_key: "B8F4E2D1C6A59B3E7F8D2A4C6E9B1F5A"            # 32 hex characters
 
 ### Configuration Options
 
+| Option | Required | Default | Description |
+|--------|----------|---------|-------------|
+| `meter_model` | No | `multical21` | Payload parser to use: `multical21` or `flowiq2200` |
+| `meter_id` | **Yes** | – | Meter serial number, 8 hex digits, as printed on the meter |
+| `aes_key` | **Yes** | – | AES-128 key, 32 hex characters (16 bytes) |
+| `cs_pin` | **Yes** | – | SPI chip-select pin (CC1101 CSN) |
+| `gdo0_pin` | **Yes** | – | Interrupt pin (CC1101 GDO0) |
+| `update_interval` | No | `60s` | Publish/health-check cadence |
+
+> Pin values accept either form: `GPIO7` or the bare number `7`.
+
 #### External Component Source Options
 
 **From GitHub (recommended):**
@@ -311,7 +361,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/mdjarv/esphome-kamstrup-wmbus
-      ref: main  # Use 'main' for latest, or 'v1.0.0' for specific version
+      ref: master  # 'master' for latest, or a release tag like 'v0.1.5'
     components: [ kamstrup_wmbus ]
     refresh: 1d  # Optional: how often to check for updates (default: never)
 ```
@@ -326,8 +376,10 @@ external_components:
 ```
 
 **Version Pinning:**
-- Use `ref: main` for the latest version (may include breaking changes)
-- Use `ref: v1.0.0` for a specific stable version (recommended for production)
+- Use `ref: master` for the latest version (may include breaking changes)
+- Pin to a published tag for stability — see the
+  [releases/tags](https://github.com/mdjarv/esphome-kamstrup-wmbus/tags) page
+  for the current list (e.g. `ref: v0.1.5`)
 - Use `refresh: 1d` to auto-update daily, or omit to cache permanently
 
 **Clearing the cache:**
@@ -338,13 +390,15 @@ rm -rf ~/.esphome/.external_components/
 
 ### Available Sensors
 
-| Sensor | Unit | Data Type | Description |
-|--------|------|-----------|-------------|
-| `total_consumption` | m³ | Float (3 decimals) | Cumulative water consumption since meter installation |
-| `target_consumption` | m³ | Float (3 decimals) | Target/reference consumption value |
-| `flow_temperature` | °C | Integer | Temperature of water flowing through meter |
-| `ambient_temperature` | °C | Integer | Temperature around meter housing |
-| `info_codes` | text | String | Meter status/error codes (see below) |
+| Sensor | Unit | Data Type | Multical21 | flowIQ 2200 | Description |
+|--------|------|-----------|:----------:|:-----------:|-------------|
+| `total_consumption` | m³ | Float (3 decimals) | ✅ | ✅ | Cumulative water consumption since meter installation |
+| `target_consumption` | m³ | Float (3 decimals) | ✅ | ⏳ | Target/reference consumption value (typically previous period) |
+| `flow_temperature` | °C | Integer | ✅ | ⏳ | Temperature of water flowing through meter |
+| `ambient_temperature` | °C | Integer | ✅ | ⏳ | Temperature around meter housing |
+| `info_codes` | text | String | ✅ | ⏳ | Meter status/error codes (see below) |
+
+✅ = supported · ⏳ = not yet mapped (reports *unavailable*)
 
 #### Info Codes (Status Values)
 
@@ -359,15 +413,18 @@ The `info_codes` text sensor reports the meter's operational status:
 | `burst` | Burst detected | Sudden high flow suggesting pipe burst |
 | `code_0xXX` | Unknown code | Unrecognized status code (XX = hex value) |
 
-**Note**: Most of the time you'll see `normal`. Other values indicate potential issues that may require attention.
+**Note**: Most of the time you'll see `normal`. Other values indicate potential
+issues that may require attention.
 
 ## Usage
 
 ### Home Assistant Integration
 
-Once flashed and connected to WiFi, the device will automatically appear in Home Assistant (if you have the ESPHome integration installed).
+Once flashed and connected to WiFi, the device will automatically appear in Home
+Assistant (if you have the ESPHome integration installed).
 
-You'll see the following entities:
+You'll see the following entities (those marked ⏳ above will be *unavailable* on
+flowIQ 2200):
 
 - **sensor.water_total** - Total water consumption
 - **sensor.water_target** - Target consumption value
@@ -380,14 +437,14 @@ You'll see the following entities:
 Check the ESPHome logs to verify operation:
 
 ```bash
-esphome logs example.yaml
+esphome logs your-config.yaml
 ```
 
 Expected log output:
 ```
 [I][kamstrup_wmbus:xxx] CC1101 in RX mode
-[I][kamstrup_wmbus.parser:xxx] >>> Frame Type: compact (marker=0x79, length=19 bytes) <<<
-[I][kamstrup_wmbus:xxx] Status: normal (0x00)
+[I][kamstrup_wmbus.multical21:xxx] >>> Frame Type: compact (marker=0x79, length=19 bytes) <<<
+[I][kamstrup_wmbus.multical21:xxx] Parsing complete: 123.456 m3, status=normal, flow=18C, ambient=21C
 [D][sensor:xxx] 'Water Total': Sending state 123.456 m³
 ```
 
@@ -398,10 +455,11 @@ Expected log output:
 Check the logs to verify component initialization:
 
 ```bash
-esphome logs example.yaml
+esphome logs your-config.yaml
 ```
 
-Look for successful initialization messages showing the radio is in RX mode and the meter ID is configured correctly.
+Look for successful initialization messages showing the radio is in RX mode and
+the meter ID is configured correctly.
 
 ### No Packets Received
 
@@ -413,7 +471,7 @@ Look for successful initialization messages showing the radio is in RX mode and 
 ### Meter ID Mismatch
 
 - Verify your `meter_id` matches the serial number on your meter
-- Check byte order - should be entered as printed on meter
+- Enter the ID exactly as printed on the meter label
 - If you see other meter IDs in logs, neighbors may have similar meters nearby
 
 ### CRC Errors
@@ -432,6 +490,21 @@ Look for successful initialization messages showing the radio is in RX mode and 
 - Component includes automatic health monitoring and recovery
 - Verify GDO0 interrupt pin connection
 
+### Helping Map flowIQ 2200 Fields
+
+If you have a flowIQ 2200 and want the remaining sensors to work, enable
+`logger: level: DEBUG`. On every packet the component dumps the decrypted
+plaintext, and "full" frames (marker `0x78`) are flagged explicitly:
+
+```
+[I][kamstrup_wmbus.flowiq2200:xxx] *** flowIQ 2200 FULL FRAME (0x78) - copy the plaintext below ***
+[D][kamstrup_wmbus.flowiq2200:xxx]   plaintext (NN bytes): 78 44 ...
+```
+
+Capturing a full frame (and noting what the meter's physical display reads at
+that moment) is what's needed to map target, temperatures, and status. Open an
+issue with the captured plaintext.
+
 ## Expected Performance
 
 - **Packet interval:** 8-16 seconds (meter dependent)
@@ -440,7 +513,8 @@ Look for successful initialization messages showing the radio is in RX mode and 
 
 ## Security Best Practices
 
-**IMPORTANT:** Protect your AES encryption key - it's the critical secret for decrypting meter data.
+**IMPORTANT:** Protect your AES encryption key - it's the critical secret for
+decrypting meter data.
 
 ### Key Security Measures
 
@@ -460,7 +534,8 @@ Look for successful initialization messages showing the radio is in RX mode and 
 | OTA password | High | Firmware updates |
 | `meter_id` | Low | Meter ID (printed on device) |
 
-If you believe your AES key has been compromised, contact your water utility immediately to request a new key.
+If you believe your AES key has been compromised, contact your water utility
+immediately to request a new key.
 
 ## Technical Details
 
@@ -492,7 +567,7 @@ The component implements:
 2. **wMBUS packet decoder** - Preamble, length, payload parsing
 3. **CRC validation** - EN 13757-4 CRC-16 algorithm
 4. **AES-128-CTR decryption** - Using mbedTLS
-5. **Meter data parser** - Supports compact and long frame formats
+5. **Meter data parser** - Per-model (Multical21, flowIQ 2200); compact and long/full frames
 6. **Health monitoring** - Automatic radio recovery
 
 ## Development
@@ -503,7 +578,7 @@ The component implements:
 esphome-kamstrup-wmbus/
 ├── components/
 │   └── kamstrup_wmbus/
-│       ├── __init__.py                # Python package marker
+│       ├── __init__.py                # Python package marker + meter model enum
 │       ├── sensor.py                  # Sensor config validation
 │       ├── text_sensor.py             # Text sensor config validation
 │       ├── kamstrup_wmbus.h/cpp       # Main component
@@ -523,8 +598,8 @@ esphome-kamstrup-wmbus/
 ### Building from Source
 
 1. Clone this repository
-2. Place in ESPHome's `external_components` directory or use local path
-3. Reference in your YAML configuration
+2. Reference the `components/` directory via a `type: local` external component (see Method 2)
+3. Build with `esphome run your-config.yaml`
 
 ### Testing
 
@@ -542,11 +617,12 @@ Success indicators in logs:
 
 ## Credits
 
-Based on the Multical21 wMBUS implementation specification documenting the complete protocol, radio configuration, and packet structure.
+Based on the wMBUS implementation specification documenting the protocol, radio
+configuration, and packet structure (see `WMBUS_IMPLEMENTATION_SPEC.md`).
 
 ## License
 
-[Your chosen license here]
+Released under the [MIT License](LICENSE).
 
 ## Support
 
@@ -558,17 +634,21 @@ For issues, questions, or contributions:
 
 ## Changelog
 
-### Version 1.0.0 (Initial Release)
+Version history is tracked via git tags — see the
+[releases/tags](https://github.com/mdjarv/esphome-kamstrup-wmbus/tags) page.
 
-- Complete wMBUS Mode C receiver implementation
-- CC1101 radio driver with SPI interface
-- AES-128-CTR decryption using mbedTLS
-- CRC-16-EN-13757-4 validation
-- Support for compact and long frame formats
+Current capabilities:
+
+- wMBUS Mode C receiver (CC1101 driver, SPI interface)
+- AES-128-CTR decryption (mbedTLS) and CRC-16 EN-13757-4 validation
+- **Multical21:** total, target, flow/ambient temperature, and status
+- **flowIQ 2200:** total volume (other fields in progress)
+- Compact and long/full frame formats
 - Automatic radio health monitoring and recovery
 - Home Assistant integration via ESPHome API
-- Water consumption, temperature, and status monitoring
 
 ## Disclaimer
 
-This component is provided as-is for educational and personal use. Ensure you have permission from your water utility to read your meter data. Some jurisdictions may have regulations regarding wireless meter reading.
+This component is provided as-is for educational and personal use. Ensure you
+have permission from your water utility to read your meter data. Some
+jurisdictions may have regulations regarding wireless meter reading.

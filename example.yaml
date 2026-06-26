@@ -44,8 +44,9 @@ sensor:
   - platform: kamstrup_wmbus
     id: water_meter_component
     # Meter model selects the payload parser. Supported: multical21, flowiq2200.
-    # NOTE: flowiq2200 is work-in-progress - it logs the decrypted telegram for
-    # field mapping but does not yet publish readings.
+    # NOTE: flowiq2200 publishes total volume only; target/temperatures/status
+    # are not yet mapped (report as unavailable) and the decrypted telegram is
+    # logged at DEBUG to help map them.
     meter_model: multical21
     cs_pin: 7
     gdo0_pin: 3
